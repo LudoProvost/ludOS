@@ -135,7 +135,7 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable) {
         Print(L"%s\n", EfiStatusToStr(s));
         //TODO add EFI_BUFFER_TOO_SMALL check
         
-        uefi_call_wrapper(SystemTable->BootServices->FreePool, 1, kernelInfo);    // return pool mem to system (necessary?)
+        // uefi_call_wrapper(SystemTable->BootServices->FreePool, 1, kernelInfo);    // return pool mem to system (necessary?)
     }
 
     //TODO add elf format check
@@ -150,16 +150,21 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable) {
     Elf64_Phdr* pheaders;
     {
         EFI_STATUS s;
-        UINT64 bufferSize = header.e_phentsize * header.e_phnum;
+        UINTN pheadersSize = header.e_phentsize * header.e_phnum;
 
-        s = uefi_call_wrapper(kernel->SetPosition, 2, kernel, header.e_phoff);
+        Print(L"pheadersSize: %lu\n", pheadersSize);
+
+        s = uefi_call_wrapper(kernel->SetPosition, 2, kernel, header.e_phoff);  // set file's current position to the pheader offset
         Print(L"setpos: %s\n", EfiStatusToStr(s));
 
-        s = uefi_call_wrapper(kernel->Read, 3, kernel, &bufferSize, (void*) pheaders);
+        s = uefi_call_wrapper(SystemTable->BootServices->AllocatePool, 3, EfiLoaderData, pheadersSize, (void**) &pheaders); // alloc size for pheaders
+        Print(L"palloc: %s\n", EfiStatusToStr(s));
+
+        s = uefi_call_wrapper(kernel->Read, 3, kernel, &pheadersSize, (void*) pheaders);  // read pheaders from kernel into allocated memory
         Print(L"readpheader: %s\n", EfiStatusToStr(s));
     }
 
-    for (UINT64 n = 0; n < header.e_phnum; n++) {
+    for (UINTN n = 0; n < header.e_phnum; n++) {
         Elf64_Phdr* pheader = (Elf64_Phdr*)((char*)pheaders + (n*header.e_phentsize));
         
         // debugging
