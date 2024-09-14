@@ -2,6 +2,7 @@
 #include <efilib.h>
 #include <elf.h>
 
+#define PAGE_SIZE 0x1000
 
 const CHAR16* EfiStatusToStr(EFI_STATUS s) {
     switch (s) {
@@ -135,7 +136,7 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable) {
         Print(L"%s\n", EfiStatusToStr(s));
         //TODO add EFI_BUFFER_TOO_SMALL check
         
-        // uefi_call_wrapper(SystemTable->BootServices->FreePool, 1, kernelInfo);    // return pool mem to system (necessary?)
+        uefi_call_wrapper(SystemTable->BootServices->FreePool, 1, kernelInfo);    // return pool mem to system (necessary?)
     }
 
     //TODO add elf format check
@@ -163,15 +164,31 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable) {
         s = uefi_call_wrapper(kernel->Read, 3, kernel, &pheadersSize, (void*) pheaders);  // read pheaders from kernel into allocated memory
         Print(L"readpheader: %s\n", EfiStatusToStr(s));
     }
+    
+    EFI_MEMORY_DESCRIPTOR* mem_map;
+    UINTN memmapsz;
 
+
+    Elf64_Addr segmentVAddr;
     for (UINTN n = 0; n < header.e_phnum; n++) {
         Elf64_Phdr* pheader = (Elf64_Phdr*)((char*)pheaders + (n*header.e_phentsize));
         
-        // debugging
-        Print(L"pheader: %u\n", pheader);
-        Print(L"p_type: %u\n", pheader->p_type);
+        if (pheader->p_type == PT_LOAD) {
+            UINTN pageCount = (pheader->p_memsz + PAGE_SIZE - 1) / PAGE_SIZE;
+            // Elf64_Addr segmentVAddr; // = pheader->p_paddr;
+            Print(L"seg: %d\n", segmentVAddr);
+            EFI_STATUS s = uefi_call_wrapper(SystemTable->BootServices->AllocatePages, 4, AllocateAnyPages, EfiLoaderData, pageCount, &segmentVAddr);
+            Print(L"allocpages: %s\n", EfiStatusToStr(s));
+            
+            s = uefi_call_wrapper(kernel->SetPosition, 2, kernel, pheader->p_offset);
+            s = uefi_call_wrapper(kernel->Read, 3, kernel, (UINTN) &pheader->p_filesz, (void*) segmentVAddr);
+            Print(L"read to page:%s\n", EfiStatusToStr(s));
+        }
     }
+    
+    int (*kernelStart)() = ((__attribute__((sysv_abi)) int (*)() ) segmentVAddr);
 
+    Print(L"kernel started with: %d\n", kernelStart());
     //TODO allocate memory for kernel
     //TODO load ELF segments
     //TODO handle segment attributes
