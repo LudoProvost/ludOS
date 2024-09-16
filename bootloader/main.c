@@ -62,10 +62,18 @@ const CHAR16* EfiStatusToStr(EFI_STATUS s) {
 }
 
 // for testing
-unsigned long read_cr2(void) {
+unsigned long ReadCR2(void) {
     unsigned long cr2;
     __asm__ volatile ("mov %%cr2, %0" : "=r" (cr2));
     return cr2;
+}
+
+void SetPaging() {
+    __asm__ volatile(
+        "mov %cr0, %rax\n"
+        "or $0x80000000, %eax\n"
+        "mov %rax, %cr0\n"
+    );
 }
 
 EFI_FILE_PROTOCOL* LoadFile(CHAR16* path, EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable) {
@@ -186,9 +194,13 @@ EFI_STATUS efi_main (EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE* SystemTable) {
         }
     }
     
+    SetPaging();
+
+
     int (*kernelStart)() = ((__attribute__((sysv_abi)) int (*)() ) segmentVAddr);
 
     Print(L"kernel started with: %d\n", kernelStart());
+
     //TODO allocate memory for kernel
     //TODO load ELF segments
     //TODO handle segment attributes
