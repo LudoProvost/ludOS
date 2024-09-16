@@ -11,7 +11,7 @@ compile:
 	objcopy -j .text -j .sdata -j .data -j .rodata -j .dynamic -j .dynsym  -j .rel -j .rela -j .rel.* -j .rela.* -j .reloc --target efi-app-x86_64 --subsystem=10 "$(BL_PATH)/main.so" "$(BL_PATH)/main.efi"
 
 makeimg: compile
-	mv "$(BL_PATH)/main.efi" BOOT_PATH
+	mv "$(BL_PATH)/main.efi" $(BOOT_PATH)
 	qemu-system-x86_64 -m 256M -cpu qemu64 -drive if=pflash,format=raw,unit=0,file="$(OVMF_PATH)/OVMF_CODE-pure-efi.fd",readonly=on \
 	-drive if=pflash,format=raw,unit=1,file="$(OVMF_PATH)/OVMF_VARS-pure-efi.fd" -net none -drive file=fat:rw:img,format=raw -nographic 
 	
